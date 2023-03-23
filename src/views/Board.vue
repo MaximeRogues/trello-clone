@@ -1,13 +1,30 @@
 <template>
   <div class="board">
     <div class="flex flex-row items-start">
-      <div class="column" v-for="column of board.columns" :key="column.id">
+      <div class="column" v-for="(column, $columnIndex) of board.columns" :key="column.id"
+        @drop="dropTaskOrColumn($event, column.tasks, $columnIndex)"
+        draggable
+        @dragstart.self="pickupColumn($event, $columnIndex)"
+        @dragenter.prevent
+        @dragover.prevent
+      > <!-- @dragover.prevent (équivalent de v-on:dragover sert à empêcher le comportement de base de l'élément
+        HTML (interdire le drop d'un élément) lorsqu'on va glisser-déposer sur cet élément
+             @dragstart.self => le self sert à ne déclencher l'événement que si c'est la colonne elle-même qui est déplacée, pas ses éléments enfants
+        -->
+
         <span class="hidden">{{column.id}}</span>
         <div class="flex items-center mb-2 font-bold">
           {{column.name}}
         </div>
         <div class="list-reset">
-          <div class="task" v-for="task of column.tasks" :key="task.id" @click="goToTask(task)">
+          <div class="task" v-for="(task, $taskIndex) of column.tasks" :key="task.id" @click="goToTask(task)"
+            draggable
+            @dragstart="pickupTask($event, $taskIndex, $columnIndex)"
+            @drop.stop="dropTaskOrColumn($event, column.tasks, $columnIndex)"
+            @dragenter.prevent
+            @dragover.prevent
+          >
+          <!-- @drop.stop empêche la propagation de l'event, sinon c'est la task ET la column qui vont chacun déclencher leur drop  -->
             <span class="hidden">{{task.id}}</span>
             <span class="w-full flex-no-shrink font-bold">
                 {{task.name}}
@@ -60,6 +77,52 @@ export default {
         name: event.target.value
       })
       event.target.value = '' // vider l'input une fois la task ajoutée
+    },
+    // méthodes pour déplacer les tasks
+    pickupTask (event, taskIndex, columnIndex) {
+      console.log('pickup Task')
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.dropEffect = 'move'
+      event.dataTransfer.setData('from_task_index', taskIndex)
+      event.dataTransfer.setData('from_column_index', columnIndex)
+      event.dataTransfer.setData('element_type', 'task')
+    },
+    dropTask (event, toTasks, toTaskIndex) {
+      console.log('drop task')
+      const fromColumnIndex = event.dataTransfer.getData('from_column_index')
+      // const fromTasks = this.board.columns[fromColumnIndex].tasks
+      // const taskIndex = event.dataTransfer.getData('task_index')
+      this.$store.commit('MOVE_TASK', {
+        fromTasks: this.board.columns[fromColumnIndex].tasks,
+        fromTaskIndex: event.dataTransfer.getData('from_task_index'),
+        toTasks: toTasks,
+        toTaskIndex: toTaskIndex
+      })
+    },
+    // méthodes pour déplacer les colonnes
+    pickupColumn (event, fromColumnIndex) {
+      console.log('pickupColumn')
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.dropEffect = 'move'
+      event.dataTransfer.setData('from_column_index', fromColumnIndex)
+      event.dataTransfer.setData('element_type', 'column')
+    },
+    dropColumn (event, toColumnIndex) {
+      console.log('dropColumn')
+      const fromColumnIndex = event.dataTransfer.getData('from_column_index')
+      this.$store.commit('MOVE_COLUMN', {
+        fromColumnIndex: fromColumnIndex,
+        toColumnIndex: toColumnIndex
+      })
+    },
+    dropTaskOrColumn (event, toTasks, toColumnIndex) {
+      console.log('dropTaskOrColumn')
+      const elementType = event.dataTransfer.getData('element_type')
+      if (elementType === 'task') {
+        this.dropTask(event, toTasks)
+      } else if (elementType === 'column') {
+        this.dropColumn(event, toColumnIndex)
+      }
     }
   }
 
